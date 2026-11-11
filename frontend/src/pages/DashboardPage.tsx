@@ -1,3 +1,5 @@
+import { SensorList } from '../features/sensors/SensorList'
+
 const sections = [
   {
     id: 'overview',
@@ -7,7 +9,7 @@ const sections = [
   {
     id: 'sensors',
     title: 'Sensors',
-    description: 'Temperature, humidity, soil and other sensor data will appear here.',
+    description: 'Create and view moisture and light sensors.',
   },
   {
     id: 'controls',
@@ -37,7 +39,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 1 dashboard shell for future greenhouse features.
+          Phase 2 dashboard with Factory Method sensors.
         </p>
       </div>
 
@@ -52,6 +54,7 @@ export default function DashboardPage() {
             <p className="mt-2 text-sm text-slate-600">
               {section.description}
             </p>
+            {section.id === 'sensors' && <SensorList />}
           </section>
         ))}
       </div>
