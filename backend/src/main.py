@@ -5,6 +5,7 @@ from scalar_fastapi import get_scalar_api_reference
 from src.infrastructure.settings import settings
 from src.interfaces.api.devices import router as devices_router
 from src.interfaces.api.health import health_check
+from src.interfaces.api.locations import router as locations_router
 from src.interfaces.api.sensors import router as sensors_router
 
 app = FastAPI(
@@ -34,6 +35,7 @@ app.add_api_route(
 
 app.include_router(sensors_router)
 app.include_router(devices_router)
+app.include_router(locations_router)
 
 
 @app.get("/")

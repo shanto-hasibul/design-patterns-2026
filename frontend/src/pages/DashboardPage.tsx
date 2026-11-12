@@ -1,3 +1,4 @@
+import { LocationConfigWizard } from '../components/config/LocationConfigWizard'
 import { DeviceList } from '../components/devices/DeviceList'
 import { SensorList } from '../features/sensors/SensorList'
 
@@ -15,7 +16,8 @@ const sections = [
   {
     id: 'devices',
     title: 'Devices',
-    description: 'Provision coherent sensor and actuator kits by family (Abstract Factory).',
+    description:
+      'Provision coherent sensor and actuator kits and assign zones (Abstract Factory).',
   },
   {
     id: 'controls',
@@ -30,7 +32,8 @@ const sections = [
   {
     id: 'configuration',
     title: 'Configuration',
-    description: 'Greenhouse configuration options will appear here.',
+    description:
+      'Build and manage locations and zones with moisture thresholds (Builder).',
   },
   {
     id: 'events',
@@ -45,7 +48,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 3 dashboard with Abstract Factory device families.
+          Phase 4 dashboard with LocationConfigBuilder and zone assignments.
         </p>
       </div>
 
@@ -62,6 +65,7 @@ export default function DashboardPage() {
             </p>
             {section.id === 'sensors' && <SensorList />}
             {section.id === 'devices' && <DeviceList />}
+            {section.id === 'configuration' && <LocationConfigWizard />}
           </section>
         ))}
       </div>

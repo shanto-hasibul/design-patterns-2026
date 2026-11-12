@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
+  assignDeviceZone,
   fetchDevices,
+  fetchLocationConfig,
+  fetchLocations,
   provisionDeviceFamily,
   type DeviceDto,
+  type LocationConfigResponseDto,
 } from '../../services/api'
 import {
   DeviceFamilySwitcher,
@@ -13,16 +17,27 @@ export function DeviceList() {
   const [selectedFamily, setSelectedFamily] =
     useState<DeviceFamilyKey>('simulation')
   const [devices, setDevices] = useState<DeviceDto[]>([])
+  const [locationConfigs, setLocationConfigs] = useState<
+    LocationConfigResponseDto[]
+  >([])
   const [loading, setLoading] = useState<boolean>(true)
   const [provisioning, setProvisioning] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadDevices = async (family: DeviceFamilyKey) => {
+  const loadDevicesAndZones = async (family: DeviceFamilyKey) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchDevices(family)
-      setDevices(data)
+      const [devs, locs] = await Promise.all([
+        fetchDevices(family),
+        fetchLocations(),
+      ])
+      setDevices(devs)
+
+      const configs = await Promise.all(
+        locs.map((l) => fetchLocationConfig(l.id)),
+      )
+      setLocationConfigs(configs)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load devices')
     } finally {
@@ -31,7 +46,15 @@ export function DeviceList() {
   }
 
   useEffect(() => {
-    void loadDevices(selectedFamily)
+    void loadDevicesAndZones(selectedFamily)
+
+    const onZonesChanged = () => {
+      void loadDevicesAndZones(selectedFamily)
+    }
+    window.addEventListener('greenhouse-locations-updated', onZonesChanged)
+    return () => {
+      window.removeEventListener('greenhouse-locations-updated', onZonesChanged)
+    }
   }, [selectedFamily])
 
   const handleProvision = async () => {
@@ -39,7 +62,7 @@ export function DeviceList() {
     setError(null)
     try {
       await provisionDeviceFamily(selectedFamily)
-      await loadDevices(selectedFamily)
+      await loadDevicesAndZones(selectedFamily)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to provision device family',
@@ -47,6 +70,29 @@ export function DeviceList() {
     } finally {
       setProvisioning(false)
     }
+  }
+
+  const handleAssignZone = async (deviceId: string, zoneId: string) => {
+    setError(null)
+    try {
+      const targetZone = zoneId === '' ? null : zoneId
+      await assignDeviceZone(deviceId, targetZone)
+      await loadDevicesAndZones(selectedFamily)
+      window.dispatchEvent(new Event('greenhouse-devices-updated'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign zone')
+    }
+  }
+
+  const getZoneLabel = (zoneId?: string | null): string => {
+    if (!zoneId) return 'Unassigned'
+    for (const cfg of locationConfigs) {
+      const found = cfg.zones.find((z) => z.id === zoneId)
+      if (found) {
+        return `${cfg.location.name} — ${found.name}`
+      }
+    }
+    return 'Unassigned'
   }
 
   return (
@@ -65,15 +111,18 @@ export function DeviceList() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading {selectedFamily} devices...</p>
+        <p className="text-sm text-slate-500">
+          Loading {selectedFamily} devices...
+        </p>
       ) : devices.length === 0 ? (
         <p className="text-sm text-slate-500">
-          No {selectedFamily} devices provisioned yet. Click Provision above to create a matching kit.
+          No {selectedFamily} devices provisioned yet. Click Provision above to
+          create a matching kit.
         </p>
       ) : (
         <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-slate-50">
           {devices.map((device) => (
-            <li key={device.id} className="p-3">
+            <li key={device.id} className="space-y-2 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm font-medium text-slate-800">
                   {device.display_name}
@@ -102,7 +151,33 @@ export function DeviceList() {
                   </span>
                 </div>
               </div>
-              <pre className="mt-2 overflow-x-auto rounded border border-slate-100 bg-white p-2 text-xs text-slate-600">
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-slate-600">
+                  Zone:{' '}
+                  <strong className="text-slate-800">
+                    {getZoneLabel(device.zone_id)}
+                  </strong>
+                </span>
+                <select
+                  value={device.zone_id ?? ''}
+                  onChange={(e) => handleAssignZone(device.id, e.target.value)}
+                  className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">— Unassigned —</option>
+                  {locationConfigs.map((cfg) => (
+                    <optgroup key={cfg.location.id} label={cfg.location.name}>
+                      {cfg.zones.map((z) => (
+                        <option key={z.id} value={z.id}>
+                          {`${cfg.location.name} — ${z.name}`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              <pre className="mt-1 overflow-x-auto rounded border border-slate-100 bg-white p-2 text-xs text-slate-600">
                 {JSON.stringify(device.default_config, null, 2)}
               </pre>
             </li>

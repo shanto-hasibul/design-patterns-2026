@@ -1,11 +1,18 @@
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from src.application.devices.dto import DeviceDto
+from src.application.devices.dto import AssignZoneRequestDto, DeviceDto
 from src.application.devices.family_service import DeviceFamilyService
-from src.application.devices.mappers import to_device_dto_list
+from src.application.devices.mappers import to_device_dto, to_device_dto_list
+from src.application.locations.zone_assignment_service import (
+    DeviceNotFoundError,
+    ZoneAssignmentService,
+    ZoneNotFoundError,
+)
 from src.infrastructure.persistence.base import get_db
 from src.infrastructure.persistence.device_repository import DeviceRepository
+from src.infrastructure.persistence.location_repository import LocationRepository
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -13,6 +20,15 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 def get_family_service(db: Session = Depends(get_db)) -> DeviceFamilyService:
     repo = DeviceRepository(db)
     return DeviceFamilyService(repo)
+
+
+def get_assignment_service(
+    db: Session = Depends(get_db),
+) -> ZoneAssignmentService:
+    return ZoneAssignmentService(
+        device_repo=DeviceRepository(db),
+        location_repo=LocationRepository(db),
+    )
 
 
 @router.get("", response_model=list[DeviceDto])
@@ -39,3 +55,20 @@ def provision_device_family(
         ) from exc
 
     return to_device_dto_list(created)
+
+
+@router.patch("/{device_id}/zone", response_model=DeviceDto)
+def assign_device_to_zone(
+    device_id: UUID,
+    payload: AssignZoneRequestDto,
+    service: ZoneAssignmentService = Depends(get_assignment_service),
+) -> DeviceDto:
+    try:
+        updated = service.assign_device_zone(device_id, payload.zone_id)
+    except (DeviceNotFoundError, ZoneNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    return to_device_dto(updated)

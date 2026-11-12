@@ -1,3 +1,4 @@
+from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,8 @@ class DeviceRepository:
             device_family=device.device_family,
             display_name=device.display_name,
             default_config=device.default_config,
+            zone_id=device.zone_id,
+            location_id=device.location_id,
         )
         self._session.add(row)
         self._session.commit()
@@ -53,6 +56,8 @@ class DeviceRepository:
                 device_family=d.device_family,
                 display_name=d.display_name,
                 default_config=d.default_config,
+                zone_id=d.zone_id,
+                location_id=d.location_id,
             )
             for d in devices
         ]
@@ -76,6 +81,31 @@ class DeviceRepository:
         rows = self._session.scalars(stmt).all()
         return [self._to_device_domain(row) for row in rows]
 
+    def list_devices_by_zone(self, zone_id: UUID) -> list[Device]:
+        stmt = (
+            select(DeviceRow)
+            .where(DeviceRow.zone_id == zone_id)
+            .order_by(DeviceRow.created_at.desc())
+        )
+        rows = self._session.scalars(stmt).all()
+        return [self._to_device_domain(row) for row in rows]
+
+    def update_device_zone(
+        self,
+        device_id: UUID,
+        zone_id: UUID | None,
+        location_id: UUID | None,
+    ) -> Device | None:
+        row = self._session.get(DeviceRow, device_id)
+        if row is None:
+            return None
+
+        row.zone_id = zone_id
+        row.location_id = location_id
+        self._session.commit()
+        self._session.refresh(row)
+        return self._to_device_domain(row)
+
     @staticmethod
     def _to_sensor_domain(row: DeviceRow) -> Sensor:
         return Sensor(
@@ -94,4 +124,6 @@ class DeviceRepository:
             device_family=row.device_family,
             display_name=row.display_name or "",
             default_config=dict(row.default_config or {}),
+            zone_id=row.zone_id,
+            location_id=row.location_id,
         )

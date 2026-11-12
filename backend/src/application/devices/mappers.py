@@ -12,6 +12,8 @@ def to_device_dto(device: Device) -> DeviceDto:
         device_family=device.device_family,
         display_name=device.display_name,
         default_config=dict(device.default_config),
+        zone_id=device.zone_id,
+        location_id=device.location_id,
     )
 
 
