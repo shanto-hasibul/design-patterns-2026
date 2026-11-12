@@ -1,3 +1,4 @@
+import { DeviceList } from '../components/devices/DeviceList'
 import { SensorList } from '../features/sensors/SensorList'
 
 const sections = [
@@ -9,7 +10,12 @@ const sections = [
   {
     id: 'sensors',
     title: 'Sensors',
-    description: 'Create and view moisture and light sensors.',
+    description: 'Create and view moisture and light sensors (Factory Method).',
+  },
+  {
+    id: 'devices',
+    title: 'Devices',
+    description: 'Provision coherent sensor and actuator kits by family (Abstract Factory).',
   },
   {
     id: 'controls',
@@ -39,7 +45,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 2 dashboard with Factory Method sensors.
+          Phase 3 dashboard with Abstract Factory device families.
         </p>
       </div>
 
@@ -55,6 +61,7 @@ export default function DashboardPage() {
               {section.description}
             </p>
             {section.id === 'sensors' && <SensorList />}
+            {section.id === 'devices' && <DeviceList />}
           </section>
         ))}
       </div>

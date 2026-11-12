@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from scalar_fastapi import get_scalar_api_reference
 
 from src.infrastructure.settings import settings
+from src.interfaces.api.devices import router as devices_router
 from src.interfaces.api.health import health_check
 from src.interfaces.api.sensors import router as sensors_router
 
@@ -32,6 +33,7 @@ app.add_api_route(
 )
 
 app.include_router(sensors_router)
+app.include_router(devices_router)
 
 
 @app.get("/")
