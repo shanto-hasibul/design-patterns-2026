@@ -22,12 +22,16 @@ class AutomationRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def get_strategy_key(self, location_id: UUID) -> str:
+    def find_saved_strategy_key(self, location_id: UUID) -> str | None:
         stmt = select(AutomationRuleRow).where(
             AutomationRuleRow.location_id == location_id
         )
         row = self._session.scalars(stmt).first()
-        return row.strategy_key if row is not None else "conservative"
+        return row.strategy_key if row is not None else None
+
+    def get_strategy_key(self, location_id: UUID) -> str:
+        saved = self.find_saved_strategy_key(location_id)
+        return saved if saved is not None else "conservative"
 
     def upsert_strategy(
         self,

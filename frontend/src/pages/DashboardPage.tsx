@@ -1,13 +1,15 @@
 import { StrategyPanel } from '../components/automation/StrategyPanel'
 import { LocationConfigWizard } from '../components/config/LocationConfigWizard'
 import { DeviceList } from '../components/devices/DeviceList'
+import { OverviewPanel } from '../components/overview/OverviewPanel'
 import { SensorList } from '../features/sensors/SensorList'
 
 const sections = [
   {
     id: 'overview',
     title: 'Overview',
-    description: 'Greenhouse summary and system status will appear here.',
+    description:
+      'Single-endpoint location summary aggregating zones, devices, readings, and strategy (Facade).',
   },
   {
     id: 'sensors',
@@ -50,7 +52,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 6 dashboard with pluggable automation strategies.
+          Phase 7 dashboard with LocationOverviewFacade.
         </p>
       </div>
 
@@ -65,6 +67,7 @@ export default function DashboardPage() {
             <p className="mt-2 text-sm text-slate-600">
               {section.description}
             </p>
+            {section.id === 'overview' && <OverviewPanel />}
             {section.id === 'sensors' && <SensorList />}
             {section.id === 'devices' && <DeviceList />}
             {section.id === 'automation' && <StrategyPanel />}

@@ -88,6 +88,45 @@ export interface EvaluateResponseDto {
   zones: ZoneRecommendationDto[]
 }
 
+export interface OverviewZoneDeviceDto {
+  id: string
+  device_type: string
+  role: 'sensor' | 'actuator' | string
+  display_name: string
+}
+
+export interface OverviewLatestReadingDto {
+  device_id: string
+  value: number
+  unit: string
+  recorded_at: string
+  tracking_enabled: boolean
+  sampling_interval_seconds: number
+}
+
+export interface OverviewZoneDto {
+  id: string
+  name: string
+  moisture_threshold_low: number
+  moisture_threshold_high: number
+  devices: OverviewZoneDeviceDto[]
+  latest_readings: OverviewLatestReadingDto[]
+}
+
+export interface LocationOverviewDto {
+  location: LocationSummaryDto
+  device_counts: {
+    sensor: number
+    actuator: number
+  }
+  zones: OverviewZoneDto[]
+  strategy_key: string | null
+  last_recommendation: {
+    action: string
+    reason: string
+  } | null
+}
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -410,4 +449,19 @@ export async function evaluateLocationAutomation(
     )
   }
   return response.json() as Promise<EvaluateResponseDto>
+}
+
+export async function fetchLocationOverview(
+  locationId: string,
+): Promise<LocationOverviewDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/locations/${locationId}/overview`,
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to load location overview (${response.status})`,
+    )
+  }
+  return response.json() as Promise<LocationOverviewDto>
 }

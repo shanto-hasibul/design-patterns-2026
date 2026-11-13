@@ -39,6 +39,21 @@ class ReadingRepository:
         rows = self.list_readings_for_device(device_id, limit=1)
         return rows[0] if rows else None
 
+    def get_latest_readings_for_devices(
+        self, device_ids: list[UUID]
+    ) -> dict[UUID, Reading]:
+        if not device_ids:
+            return {}
+
+        stmt = (
+            select(ReadingRow)
+            .where(ReadingRow.device_id.in_(device_ids))
+            .distinct(ReadingRow.device_id)
+            .order_by(ReadingRow.device_id, ReadingRow.recorded_at.desc())
+        )
+        rows = self._session.scalars(stmt).all()
+        return {r.device_id: self._to_domain(r) for r in rows}
+
     @staticmethod
     def _to_domain(row: ReadingRow) -> Reading:
         return Reading(

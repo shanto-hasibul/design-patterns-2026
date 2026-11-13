@@ -100,6 +100,18 @@ class DeviceRepository:
         rows = self._session.scalars(stmt).all()
         return [self._to_device_domain(row) for row in rows]
 
+    def list_assigned_devices_for_location(self, location_id: UUID) -> list[Device]:
+        stmt = (
+            select(DeviceRow)
+            .where(
+                DeviceRow.location_id == location_id,
+                DeviceRow.zone_id.is_not(None),
+            )
+            .order_by(DeviceRow.created_at.asc())
+        )
+        rows = self._session.scalars(stmt).all()
+        return [self._to_device_domain(row) for row in rows]
+
     def list_devices_by_zone(self, zone_id: UUID) -> list[Device]:
         stmt = (
             select(DeviceRow)
