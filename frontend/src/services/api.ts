@@ -66,6 +66,28 @@ export interface LocationConfigResponseDto {
   zones: ZoneResponseDto[]
 }
 
+export interface StrategyRuleResponseDto {
+  location_id: string
+  strategy_key: 'conservative' | 'aggressive' | string
+}
+
+export interface ZoneRecommendationDto {
+  zone_id: string
+  zone_name: string
+  action: 'irrigate' | 'wait' | string
+  reason: string
+  score?: number | null
+}
+
+export interface EvaluateResponseDto {
+  location_id: string
+  strategy_key: string
+  action: 'irrigate' | 'wait' | string
+  reason: string
+  score?: number | null
+  zones: ZoneRecommendationDto[]
+}
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -334,4 +356,58 @@ export async function fetchZoneDevices(
     throw new Error(`Failed to fetch zone devices (${response.status})`)
   }
   return response.json() as Promise<DeviceDto[]>
+}
+
+export async function fetchLocationStrategy(
+  locationId: string,
+): Promise<StrategyRuleResponseDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/locations/${locationId}/automation/strategy`,
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to load strategy (${response.status})`,
+    )
+  }
+  return response.json() as Promise<StrategyRuleResponseDto>
+}
+
+export async function saveLocationStrategy(
+  locationId: string,
+  strategyKey: string,
+): Promise<StrategyRuleResponseDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/locations/${locationId}/automation/strategy`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ strategy_key: strategyKey }),
+    },
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to save strategy (${response.status})`,
+    )
+  }
+  return response.json() as Promise<StrategyRuleResponseDto>
+}
+
+export async function evaluateLocationAutomation(
+  locationId: string,
+): Promise<EvaluateResponseDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/locations/${locationId}/automation/evaluate`,
+    {
+      method: 'POST',
+    },
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to evaluate automation (${response.status})`,
+    )
+  }
+  return response.json() as Promise<EvaluateResponseDto>
 }

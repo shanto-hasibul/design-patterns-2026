@@ -1,3 +1,4 @@
+import { StrategyPanel } from '../components/automation/StrategyPanel'
 import { LocationConfigWizard } from '../components/config/LocationConfigWizard'
 import { DeviceList } from '../components/devices/DeviceList'
 import { SensorList } from '../features/sensors/SensorList'
@@ -27,7 +28,8 @@ const sections = [
   {
     id: 'automation',
     title: 'Automation',
-    description: 'Automation rules and schedules will appear here.',
+    description:
+      'Select and evaluate pluggable irrigation strategies per location (Strategy).',
   },
   {
     id: 'configuration',
@@ -48,7 +50,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 4 dashboard with LocationConfigBuilder and zone assignments.
+          Phase 6 dashboard with pluggable automation strategies.
         </p>
       </div>
 
@@ -65,6 +67,7 @@ export default function DashboardPage() {
             </p>
             {section.id === 'sensors' && <SensorList />}
             {section.id === 'devices' && <DeviceList />}
+            {section.id === 'automation' && <StrategyPanel />}
             {section.id === 'configuration' && <LocationConfigWizard />}
           </section>
         ))}
