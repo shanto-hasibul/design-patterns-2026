@@ -33,6 +33,9 @@ export interface DeviceDto {
   location_id?: string | null
   sampling_interval_seconds?: number
   tracking_enabled?: boolean
+  state?: 'off' | 'idle' | 'running' | 'error' | 'maintenance' | string | null
+  allowed_commands?: string[]
+  allowed_targets?: string[]
 }
 
 export interface ZoneInputDto {
@@ -266,6 +269,27 @@ export async function assignDeviceZone(
     const errorData = await response.json().catch(() => null)
     throw new Error(
       errorData?.detail || `Failed to assign zone (${response.status})`,
+    )
+  }
+  return response.json() as Promise<DeviceDto>
+}
+
+export async function transitionActuatorState(
+  deviceId: string,
+  target: string,
+): Promise<DeviceDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/devices/${deviceId}/transition`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target }),
+    },
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Transition rejected (${response.status})`,
     )
   }
   return response.json() as Promise<DeviceDto>
