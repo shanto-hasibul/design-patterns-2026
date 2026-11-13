@@ -8,6 +8,18 @@ export interface SensorDto {
   device_type: string
   display_name: string
   default_config: Record<string, unknown>
+  sampling_interval_seconds: number
+  tracking_enabled: boolean
+  zone_id?: string | null
+  location_id?: string | null
+}
+
+export interface ReadingDto {
+  device_id: string
+  value: number
+  unit: string
+  source: 'simulation' | 'mqtt' | 'vendor' | string
+  recorded_at: string
 }
 
 export interface DeviceDto {
@@ -19,6 +31,8 @@ export interface DeviceDto {
   default_config: Record<string, unknown>
   zone_id?: string | null
   location_id?: string | null
+  sampling_interval_seconds?: number
+  tracking_enabled?: boolean
 }
 
 export interface ZoneInputDto {
@@ -90,6 +104,57 @@ export async function createSensor(
     )
   }
   return response.json() as Promise<SensorDto>
+}
+
+export async function triggerSensorRead(sensorId: string): Promise<ReadingDto> {
+  const response = await fetch(`${API_BASE_URL}/api/sensors/${sensorId}/read`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to read sensor (${response.status})`,
+    )
+  }
+  return response.json() as Promise<ReadingDto>
+}
+
+export async function fetchSensorReadings(
+  sensorId: string,
+  limit = 1,
+): Promise<ReadingDto[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/sensors/${sensorId}/readings?limit=${limit}`,
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sensor readings (${response.status})`)
+  }
+  return response.json() as Promise<ReadingDto[]>
+}
+
+export async function updateDeviceSampling(
+  deviceId: string,
+  samplingIntervalSeconds: number,
+  trackingEnabled: boolean,
+): Promise<DeviceDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/devices/${deviceId}/sampling`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sampling_interval_seconds: samplingIntervalSeconds,
+        tracking_enabled: trackingEnabled,
+      }),
+    },
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to update sampling (${response.status})`,
+    )
+  }
+  return response.json() as Promise<DeviceDto>
 }
 
 export async function fetchDevices(

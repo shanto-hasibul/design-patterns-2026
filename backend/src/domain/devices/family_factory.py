@@ -31,9 +31,11 @@ class SimulationDeviceFamilyFactory(DeviceFamilyFactory):
             display_name=moisture_proto.display_name,
             default_config={
                 **moisture_proto.default_config,
-                "protocol": "mock_random",
+                "protocol": "simulation",
                 "simulated_noise": 0.05,
             },
+            sampling_interval_seconds=300,
+            tracking_enabled=True,
         )
         light_sensor = Device(
             id=None,
@@ -43,9 +45,11 @@ class SimulationDeviceFamilyFactory(DeviceFamilyFactory):
             display_name=light_proto.display_name,
             default_config={
                 **light_proto.default_config,
-                "protocol": "mock_sine_wave",
+                "protocol": "simulation",
                 "simulated_noise": 0.02,
             },
+            sampling_interval_seconds=180,
+            tracking_enabled=True,
         )
         water_pump = Device(
             id=None,
@@ -54,7 +58,7 @@ class SimulationDeviceFamilyFactory(DeviceFamilyFactory):
             device_family=self.family_key,
             display_name="Sim Irrigation Water Pump",
             default_config={
-                "protocol": "mock_relay",
+                "protocol": "simulation",
                 "flow_rate_lpm": 2.5,
                 "max_runtime_seconds": 60,
             },
@@ -66,7 +70,7 @@ class SimulationDeviceFamilyFactory(DeviceFamilyFactory):
             device_family=self.family_key,
             display_name="Sim LED Grow Light Array",
             default_config={
-                "protocol": "mock_pwm",
+                "protocol": "simulation",
                 "spectrum": "full_spectrum_sim",
                 "default_intensity_percent": 75,
             },
@@ -80,8 +84,8 @@ class EdgeDeviceFamilyFactory(DeviceFamilyFactory):
         return "edge"
 
     def create_device_set(self) -> list[Device]:
-        moisture_proto = MoistureSensorCreator().create_sensor("Edge I2C Soil Moisture Probe")
-        light_proto = LightSensorCreator().create_sensor("Edge BH1750 LUX Sensor")
+        moisture_proto = MoistureSensorCreator().create_sensor("Edge MQTT Soil Moisture Probe")
+        light_proto = LightSensorCreator().create_sensor("Edge MQTT BH1750 LUX Sensor")
 
         moisture_sensor = Device(
             id=None,
@@ -91,10 +95,11 @@ class EdgeDeviceFamilyFactory(DeviceFamilyFactory):
             display_name=moisture_proto.display_name,
             default_config={
                 **moisture_proto.default_config,
-                "protocol": "i2c",
-                "i2c_address": "0x36",
-                "bus": 1,
+                "protocol": "mqtt",
+                "topic": "greenhouse/edge/moisture",
             },
+            sampling_interval_seconds=300,
+            tracking_enabled=True,
         )
         light_sensor = Device(
             id=None,
@@ -104,21 +109,21 @@ class EdgeDeviceFamilyFactory(DeviceFamilyFactory):
             display_name=light_proto.display_name,
             default_config={
                 **light_proto.default_config,
-                "protocol": "i2c",
-                "i2c_address": "0x23",
-                "bus": 1,
+                "protocol": "mqtt",
+                "topic": "greenhouse/edge/light",
             },
+            sampling_interval_seconds=180,
+            tracking_enabled=True,
         )
         water_pump = Device(
             id=None,
             device_type="water_pump",
             role="actuator",
             device_family=self.family_key,
-            display_name="Edge GPIO Relay Water Pump",
+            display_name="Edge MQTT Relay Water Pump",
             default_config={
-                "protocol": "gpio_relay",
-                "gpio_pin": 17,
-                "active_high": True,
+                "protocol": "mqtt",
+                "topic": "greenhouse/edge/pump",
                 "flow_rate_lpm": 4.0,
             },
         )
@@ -127,11 +132,10 @@ class EdgeDeviceFamilyFactory(DeviceFamilyFactory):
             device_type="grow_light",
             role="actuator",
             device_family=self.family_key,
-            display_name="Edge PWM Grow Light Bar",
+            display_name="Edge MQTT PWM Grow Light Bar",
             default_config={
-                "protocol": "gpio_pwm",
-                "gpio_pin": 18,
-                "frequency_hz": 1000,
+                "protocol": "mqtt",
+                "topic": "greenhouse/edge/grow_light",
                 "default_intensity_percent": 80,
             },
         )

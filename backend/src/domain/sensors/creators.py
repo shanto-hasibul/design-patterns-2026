@@ -10,43 +10,62 @@ class SensorCreator(ABC):
 
 class MoistureSensorCreator(SensorCreator):
     def create_sensor(self, display_name: str | None = None) -> Sensor:
-        name = display_name.strip() if display_name and display_name.strip() else "Soil moisture sensor"
+        name = (
+            display_name.strip()
+            if display_name and display_name.strip()
+            else "Soil Moisture Sensor"
+        )
         return Sensor(
             id=None,
             device_type="moisture_sensor",
             display_name=name,
             default_config={
                 "unit": "vwc",
+                "protocol": "simulation",
                 "sampling_interval_seconds": 300,
-                "moisture_threshold": 35.0,
+                "moisture_threshold": 0.35,
             },
+            sampling_interval_seconds=300,
+            tracking_enabled=True,
         )
 
 
 class LightSensorCreator(SensorCreator):
     def create_sensor(self, display_name: str | None = None) -> Sensor:
-        name = display_name.strip() if display_name and display_name.strip() else "Ambient light sensor"
+        name = (
+            display_name.strip()
+            if display_name and display_name.strip()
+            else "PAR Light Sensor"
+        )
         return Sensor(
             id=None,
             device_type="light_sensor",
             display_name=name,
             default_config={
                 "unit": "lux",
-                "sampling_interval_seconds": 120,
+                "protocol": "simulation",
+                "sampling_interval_seconds": 180,
+                "daylight_lux_target": 12000,
             },
+            sampling_interval_seconds=180,
+            tracking_enabled=True,
         )
 
 
-_CREATOR_REGISTRY: dict[str, type[SensorCreator]] = {
+_CREATORS: dict[str, type[SensorCreator]] = {
     "moisture": MoistureSensorCreator,
+    "moisture_sensor": MoistureSensorCreator,
     "light": LightSensorCreator,
+    "light_sensor": LightSensorCreator,
 }
 
 
-def get_creator(sensor_type: str) -> SensorCreator:
-    normalized = sensor_type.strip().lower() if sensor_type else ""
-    creator_cls = _CREATOR_REGISTRY.get(normalized)
+def get_sensor_creator(kind: str) -> SensorCreator:
+    normalized = kind.strip().lower() if kind else ""
+    creator_cls = _CREATORS.get(normalized)
     if creator_cls is None:
-        supported = ", ".join(sorted(_CREATOR_REGISTRY.keys()))
-        raise ValueError(f"Unknown sensor type '{sensor_type}'. Supported types: {supported}")
+        supported = ", ".join(sorted({"moisture", "light"}))
+        raise ValueError(
+            f"Unknown sensor type '{kind}'. Supported types: {supported}"
+        )
     return creator_cls()

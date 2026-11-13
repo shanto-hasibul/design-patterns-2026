@@ -10,6 +10,7 @@ from src.application.locations.zone_assignment_service import (
     ZoneAssignmentService,
     ZoneNotFoundError,
 )
+from src.application.readings.dto import UpdateSamplingRequestDto
 from src.infrastructure.persistence.base import get_db
 from src.infrastructure.persistence.device_repository import DeviceRepository
 from src.infrastructure.persistence.location_repository import LocationRepository
@@ -29,6 +30,10 @@ def get_assignment_service(
         device_repo=DeviceRepository(db),
         location_repo=LocationRepository(db),
     )
+
+
+def get_device_repo(db: Session = Depends(get_db)) -> DeviceRepository:
+    return DeviceRepository(db)
 
 
 @router.get("", response_model=list[DeviceDto])
@@ -70,5 +75,31 @@ def assign_device_to_zone(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+    return to_device_dto(updated)
+
+
+@router.patch("/{device_id}/sampling", response_model=DeviceDto)
+def update_device_sampling(
+    device_id: UUID,
+    payload: UpdateSamplingRequestDto,
+    repo: DeviceRepository = Depends(get_device_repo),
+) -> DeviceDto:
+    if payload.sampling_interval_seconds < 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sampling_interval_seconds must be at least 5 seconds.",
+        )
+
+    updated = repo.update_device_sampling(
+        device_id=device_id,
+        sampling_interval_seconds=payload.sampling_interval_seconds,
+        tracking_enabled=payload.tracking_enabled,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device '{device_id}' not found.",
+        )
 
     return to_device_dto(updated)
