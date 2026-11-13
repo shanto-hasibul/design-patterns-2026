@@ -38,6 +38,15 @@ export interface DeviceDto {
   allowed_targets?: string[]
 }
 
+export interface ActuatorExecutionDto {
+  id: string
+  device_id: string
+  success: boolean
+  policy_applied: string[]
+  message: string | null
+  created_at: string
+}
+
 export interface ZoneInputDto {
   name: string
   moisture_threshold_low: number
@@ -293,6 +302,40 @@ export async function transitionActuatorState(
     )
   }
   return response.json() as Promise<DeviceDto>
+}
+
+export async function fetchActuatorExecutions(
+  limit = 20,
+): Promise<ActuatorExecutionDto[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/actuators/executions?limit=${limit}`,
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to fetch actuator executions (${response.status})`)
+  }
+  return response.json() as Promise<ActuatorExecutionDto[]>
+}
+
+export async function applyActuatorCommand(
+  deviceId: string,
+  command: string,
+  payload: Record<string, unknown> = {},
+): Promise<ActuatorExecutionDto> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/actuators/${deviceId}/apply`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, payload }),
+    },
+  )
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null)
+    throw new Error(
+      errorData?.detail || `Failed to apply command (${response.status})`,
+    )
+  }
+  return response.json() as Promise<ActuatorExecutionDto>
 }
 
 export async function fetchLocations(): Promise<LocationSummaryDto[]> {
