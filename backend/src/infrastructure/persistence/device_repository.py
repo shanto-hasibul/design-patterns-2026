@@ -1,10 +1,11 @@
+from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.domain.devices.entity import Device
 from src.domain.sensors.entity import Sensor
-from src.infrastructure.persistence.models import DeviceRow
+from src.infrastructure.persistence.models import ActuatorStateRow, DeviceRow
 
 
 class DeviceRepository:
@@ -61,6 +62,15 @@ class DeviceRepository:
             tracking_enabled=device.tracking_enabled,
         )
         self._session.add(row)
+        self._session.flush()
+        if row.role == "actuator":
+            self._session.add(
+                ActuatorStateRow(
+                    device_id=row.id,
+                    state="idle",
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
         self._session.commit()
         self._session.refresh(row)
         return self._to_device_domain(row)
@@ -81,6 +91,17 @@ class DeviceRepository:
             for d in devices
         ]
         self._session.add_all(rows)
+        self._session.flush()
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            if row.role == "actuator":
+                self._session.add(
+                    ActuatorStateRow(
+                        device_id=row.id,
+                        state="idle",
+                        updated_at=now,
+                    )
+                )
         self._session.commit()
         for row in rows:
             self._session.refresh(row)
