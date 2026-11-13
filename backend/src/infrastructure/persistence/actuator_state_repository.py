@@ -17,6 +17,12 @@ class ActuatorStateRepository:
             return "idle"
         return row.state
 
+    def get_state_record(self, device_id: UUID) -> tuple[str, datetime | None]:
+        row = self._session.get(ActuatorStateRow, device_id)
+        if row is None:
+            return "idle", None
+        return row.state, row.updated_at
+
     def get_states_for_devices(self, device_ids: list[UUID]) -> dict[UUID, str]:
         if not device_ids:
             return {}

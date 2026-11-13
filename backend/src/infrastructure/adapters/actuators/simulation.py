@@ -6,7 +6,7 @@ from src.domain.actuators.ports import ActuatorPort
 
 
 class SimulationActuatorAdapter(ActuatorPort):
-    """In-memory simulation actuator adapter (no physical GPIO). Ready for Phase 9 Decorator wrapping."""
+    """Innermost simulation actuator adapter (in-memory record only; no GPIO)."""
 
     def __init__(self) -> None:
         self.history: list[dict[str, Any]] = []
@@ -16,13 +16,13 @@ class SimulationActuatorAdapter(ActuatorPort):
         device_id: UUID,
         command: str,
         payload: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        record = {
-            "device_id": str(device_id),
-            "command": command,
-            "payload": dict(payload or {}),
-            "source": "simulation",
-            "applied_at": datetime.now(timezone.utc).isoformat(),
-        }
-        self.history.append(record)
-        return record
+    ) -> None:
+        self.history.append(
+            {
+                "device_id": str(device_id),
+                "command": command,
+                "payload": dict(payload or {}),
+                "source": "simulation",
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )

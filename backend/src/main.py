@@ -11,6 +11,7 @@ from src.infrastructure.persistence.base import SessionLocal
 from src.infrastructure.persistence.device_repository import DeviceRepository
 from src.infrastructure.persistence.reading_repository import ReadingRepository
 from src.infrastructure.settings import settings
+from src.interfaces.api.actuators import router as actuators_router
 from src.interfaces.api.automation import router as automation_router
 from src.interfaces.api.devices import router as devices_router
 from src.interfaces.api.health import health_check
@@ -75,6 +76,7 @@ app.include_router(devices_router)
 app.include_router(locations_router)
 app.include_router(automation_router)
 app.include_router(overview_router)
+app.include_router(actuators_router)
 
 
 @app.get("/")
