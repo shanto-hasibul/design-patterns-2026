@@ -1,5 +1,6 @@
 import { ExecutionLog } from '../components/actuators/ExecutionLog'
 import { StrategyPanel } from '../components/automation/StrategyPanel'
+import { CommandPanel } from '../components/commands/CommandPanel'
 import { LocationConfigWizard } from '../components/config/LocationConfigWizard'
 import { DeviceList } from '../components/devices/DeviceList'
 import { OverviewPanel } from '../components/overview/OverviewPanel'
@@ -27,7 +28,7 @@ const sections = [
     id: 'controls',
     title: 'Controls',
     description:
-      'Apply commands through decorated ActuatorPort and inspect execution logs (Decorator).',
+      'Dispatch audited actuator commands respecting allowed_commands and inspect execution logs (Command & Decorator).',
   },
   {
     id: 'automation',
@@ -54,7 +55,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 9 dashboard with decorated ActuatorPort execution logs.
+          Phase 10 dashboard with Command pattern controls and auditable command history.
         </p>
       </div>
 
@@ -72,7 +73,13 @@ export default function DashboardPage() {
             {section.id === 'overview' && <OverviewPanel />}
             {section.id === 'sensors' && <SensorList />}
             {section.id === 'devices' && <DeviceList />}
-            {section.id === 'controls' && <ExecutionLog />}
+            {section.id === 'controls' && (
+              <>
+                <CommandPanel />
+                <hr className="my-5 border-slate-200" />
+                <ExecutionLog />
+              </>
+            )}
             {section.id === 'automation' && <StrategyPanel />}
             {section.id === 'configuration' && <LocationConfigWizard />}
           </section>

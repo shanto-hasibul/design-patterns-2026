@@ -47,6 +47,16 @@ export interface ActuatorExecutionDto {
   created_at: string
 }
 
+export interface CommandLogResponseDto {
+  id: string
+  command_type: string
+  device_id: string
+  payload: Record<string, unknown>
+  status: 'success' | 'failed' | 'rejected' | string
+  error_message: string | null
+  created_at: string
+}
+
 export interface ZoneInputDto {
   name: string
   moisture_threshold_low: number
@@ -336,6 +346,39 @@ export async function applyActuatorCommand(
     )
   }
   return response.json() as Promise<ActuatorExecutionDto>
+}
+
+export async function executeActuatorCommand(
+  commandType: string,
+  deviceId: string,
+  payload: Record<string, unknown> = {},
+): Promise<CommandLogResponseDto> {
+  const response = await fetch(`${API_BASE_URL}/api/commands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      command_type: commandType,
+      device_id: deviceId,
+      payload,
+    }),
+  })
+  if (response.status === 200 || response.status === 409) {
+    return response.json() as Promise<CommandLogResponseDto>
+  }
+  const errorData = await response.json().catch(() => null)
+  throw new Error(
+    errorData?.detail || `Failed to execute command (${response.status})`,
+  )
+}
+
+export async function fetchCommandHistory(
+  limit = 50,
+): Promise<CommandLogResponseDto[]> {
+  const response = await fetch(`${API_BASE_URL}/api/commands?limit=${limit}`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch command history (${response.status})`)
+  }
+  return response.json() as Promise<CommandLogResponseDto[]>
 }
 
 export async function fetchLocations(): Promise<LocationSummaryDto[]> {
