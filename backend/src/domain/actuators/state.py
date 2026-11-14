@@ -69,7 +69,13 @@ class IdleState(ActuatorState):
 
     @property
     def allowed_commands(self) -> list[str]:
-        return ["start_pump", "turn_on_light", "power_off", "enter_maintenance"]
+        return [
+            "start_pump",
+            "set_light_level",
+            "turn_on_light",
+            "power_off",
+            "enter_maintenance",
+        ]
 
 
 class RunningState(ActuatorState):
@@ -83,7 +89,7 @@ class RunningState(ActuatorState):
 
     @property
     def allowed_commands(self) -> list[str]:
-        return ["stop_pump", "turn_off_light"]
+        return ["stop_pump", "set_light_level", "turn_off_light"]
 
 
 class ErrorState(ActuatorState):
