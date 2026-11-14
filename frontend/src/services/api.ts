@@ -57,6 +57,18 @@ export interface CommandLogResponseDto {
   created_at: string
 }
 
+export interface AlertDto {
+  id: string
+  location_id: string | null
+  zone_id: string | null
+  device_id: string | null
+  severity: 'info' | 'warning' | 'critical' | string
+  message: string
+  event_type: string
+  status: 'active' | 'resolved' | string
+  created_at: string
+}
+
 export interface ZoneInputDto {
   name: string
   moisture_threshold_low: number
@@ -379,6 +391,26 @@ export async function fetchCommandHistory(
     throw new Error(`Failed to fetch command history (${response.status})`)
   }
   return response.json() as Promise<CommandLogResponseDto[]>
+}
+
+export async function fetchAlerts(params?: {
+  status?: string
+  location_id?: string
+  zone_id?: string
+  limit?: number
+}): Promise<AlertDto[]> {
+  const search = new URLSearchParams()
+  if (params?.status) search.set('status', params.status)
+  if (params?.location_id) search.set('location_id', params.location_id)
+  if (params?.zone_id) search.set('zone_id', params.zone_id)
+  if (params?.limit) search.set('limit', String(params.limit))
+
+  const qs = search.toString()
+  const response = await fetch(`${API_BASE_URL}/api/alerts${qs ? `?${qs}` : ''}`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch alerts (${response.status})`)
+  }
+  return response.json() as Promise<AlertDto[]>
 }
 
 export async function fetchLocations(): Promise<LocationSummaryDto[]> {

@@ -3,6 +3,7 @@ import { StrategyPanel } from '../components/automation/StrategyPanel'
 import { CommandPanel } from '../components/commands/CommandPanel'
 import { LocationConfigWizard } from '../components/config/LocationConfigWizard'
 import { DeviceList } from '../components/devices/DeviceList'
+import { EventFeed } from '../components/events/EventFeed'
 import { OverviewPanel } from '../components/overview/OverviewPanel'
 import { SensorList } from '../features/sensors/SensorList'
 
@@ -45,7 +46,8 @@ const sections = [
   {
     id: 'events',
     title: 'Events',
-    description: 'System events and activity history will appear here.',
+    description:
+      'Persisted domain alerts and event feed filtered by location and zone (Observer).',
   },
 ]
 
@@ -55,7 +57,7 @@ export default function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
         <p className="mt-2 text-slate-600">
-          Phase 10 dashboard with Command pattern controls and auditable command history.
+          Phase 11 dashboard with Observer event bus and persisted alerts feed.
         </p>
       </div>
 
@@ -82,6 +84,7 @@ export default function DashboardPage() {
             )}
             {section.id === 'automation' && <StrategyPanel />}
             {section.id === 'configuration' && <LocationConfigWizard />}
+            {section.id === 'events' && <EventFeed />}
           </section>
         ))}
       </div>
