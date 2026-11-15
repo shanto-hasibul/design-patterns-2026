@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ExecutionLog } from '../components/actuators/ExecutionLog'
 import { StrategyPanel } from '../components/automation/StrategyPanel'
 import { CommandPanel } from '../components/commands/CommandPanel'
@@ -6,6 +7,10 @@ import { DeviceList } from '../components/devices/DeviceList'
 import { EventFeed } from '../components/events/EventFeed'
 import { OverviewPanel } from '../components/overview/OverviewPanel'
 import { SensorList } from '../features/sensors/SensorList'
+import {
+  subscribeRealtimeStatus,
+  type RealtimeStatus,
+} from '../services/realtime'
 
 const sections = [
   {
@@ -47,18 +52,49 @@ const sections = [
     id: 'events',
     title: 'Events',
     description:
-      'Persisted domain alerts and event feed filtered by location and zone (Observer).',
+      'Persisted domain alerts and live event feed filtered by location and zone (Observer & WS).',
   },
 ]
 
 export default function DashboardPage() {
+  const [wsStatus, setWsStatus] = useState<RealtimeStatus>('connecting')
+
+  useEffect(() => {
+    return subscribeRealtimeStatus(setWsStatus)
+  }, [])
+
+  const wsBadgeClass =
+    wsStatus === 'connected'
+      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+      : wsStatus === 'connecting'
+        ? 'bg-amber-100 text-amber-800 border-amber-300'
+        : 'bg-red-100 text-red-800 border-red-300'
+
   return (
     <div>
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
-        <p className="mt-2 text-slate-600">
-          Phase 11 dashboard with Observer event bus and persisted alerts feed.
-        </p>
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">Smart Greenhouse Dashboard</h2>
+          <p className="mt-2 text-slate-600">
+            Production dashboard with live WebSocket fan-out, hardened schema,
+            and full GoF architecture.
+          </p>
+        </div>
+
+        <div
+          className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${wsBadgeClass}`}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              wsStatus === 'connected'
+                ? 'bg-emerald-600'
+                : wsStatus === 'connecting'
+                  ? 'bg-amber-500'
+                  : 'bg-red-600'
+            }`}
+          />
+          <span>WS: {wsStatus}</span>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

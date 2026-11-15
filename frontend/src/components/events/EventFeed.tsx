@@ -7,6 +7,11 @@ import {
   type LocationSummaryDto,
   type ZoneResponseDto,
 } from '../../services/api'
+import {
+  subscribeRealtime,
+  subscribeRealtimeStatus,
+  type RealtimeStatus,
+} from '../../services/realtime'
 
 const ALERT_POLL_INTERVAL_MS = 4000
 
@@ -17,6 +22,7 @@ export function EventFeed() {
   const [selectedLocationId, setSelectedLocationId] = useState<string>('')
   const [selectedZoneId, setSelectedZoneId] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('active')
+  const [wsStatus, setWsStatus] = useState<RealtimeStatus>('connecting')
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,7 +31,7 @@ export function EventFeed() {
       const locs = await fetchLocations()
       setLocations(locs)
     } catch {
-      // Ignore location dropdown errors if none exist yet
+      // Ignore if none exist yet
     }
   }
 
@@ -70,14 +76,29 @@ export function EventFeed() {
     }
   }
 
-  // Initial fetch + polling every 4 seconds (4000ms) until Phase 12 WebSocket push replaces it.
+  // Subscribe to live alert.created over WebSocket
+  useEffect(() => {
+    const unsubStatus = subscribeRealtimeStatus(setWsStatus)
+    const unsubEvents = subscribeRealtime((event) => {
+      if (event.type === 'alert.created') {
+        void loadAlerts(true)
+      }
+    })
+    return () => {
+      unsubStatus()
+      unsubEvents()
+    }
+  }, [selectedLocationId, selectedZoneId, statusFilter])
+
+  // Initial load + fallback polling only when WebSocket is not connected
   useEffect(() => {
     void loadAlerts(false)
+    if (wsStatus === 'connected') return
     const timer = window.setInterval(() => {
       void loadAlerts(true)
     }, ALERT_POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)
-  }, [selectedLocationId, selectedZoneId, statusFilter])
+  }, [selectedLocationId, selectedZoneId, statusFilter, wsStatus])
 
   const severityBadgeClass = (severity: string) => {
     if (severity === 'critical') return 'bg-red-100 text-red-800'
@@ -88,7 +109,9 @@ export function EventFeed() {
   return (
     <div className="mt-4 space-y-3 text-sm">
       <p className="text-[11px] text-slate-400">
-        Polls persisted alerts every 4s (Phase 12 replaces with WebSocket).
+        {wsStatus === 'connected'
+          ? 'Subscribed to live WebSocket alert.created stream.'
+          : 'WebSocket disconnected — polling /api/alerts every 4s as fallback.'}
       </p>
 
       {/* Location, Zone & Status Filters */}
