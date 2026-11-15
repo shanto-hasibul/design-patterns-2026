@@ -1,101 +1,158 @@
-from collections import Counter
-from collections.abc import Callable
+import json
+import logging
+import socket
+import threading
+from urllib.parse import urlparse
 from uuid import UUID
 
-from src.domain.events.bus import EventBus, EventSubscriber
-from src.domain.events.events import (
-    ActuatorStateChanged,
-    CommandFailed,
-    DomainEvent,
-    ReadingCreated,
-    ThresholdCrossed,
-)
+from src.application.alerts.subscribers import build_default_event_bus
+from src.application.readings.service import ReadingIngest
+from src.infrastructure.adapters.sensors.mqtt import MqttSensorAdapter
 from src.infrastructure.persistence.alert_repository import AlertRepository
+from src.infrastructure.persistence.base import SessionLocal
+from src.infrastructure.persistence.device_repository import DeviceRepository
+from src.infrastructure.persistence.reading_repository import ReadingRepository
+from src.infrastructure.settings import settings
 
-DEFAULT_LOW_MOISTURE_THRESHOLD = 0.30
+logger = logging.getLogger(__name__)
 
 
-class AlertPersistenceSubscriber(EventSubscriber):
-    """Subscribes to domain events and persists actionable alerts into the alerts table."""
+def _parse_broker_host_port(broker_url: str, default_port: int = 1883) -> tuple[str, int]:
+    if "://" not in broker_url:
+        broker_url = f"mqtt://{broker_url}"
+    parsed = urlparse(broker_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or default_port
+    return host, port
 
-    def __init__(
-        self,
-        alert_repo: AlertRepository,
-        zone_threshold_lookup: Callable[[UUID], float | None] | None = None,
-    ) -> None:
-        self._alert_repo = alert_repo
-        self._zone_threshold_lookup = (
-            zone_threshold_lookup or alert_repo.get_zone_moisture_low
+
+def publish_retained_mqtt_config(
+    device_id: UUID,
+    sampling_interval_seconds: int,
+    tracking_enabled: bool,
+    broker_url: str | None = None,
+) -> bool:
+    """Publishes retained config JSON to greenhouse/devices/{device_id}/config when broker is configured."""
+    url = broker_url if broker_url is not None else settings.mqtt_broker_url
+    if not url:
+        return False
+
+    topic = f"greenhouse/devices/{device_id}/config"
+    payload = json.dumps(
+        {
+            "sampling_interval_seconds": sampling_interval_seconds,
+            "tracking_enabled": tracking_enabled,
+        }
+    ).encode("utf-8")
+
+    try:
+        import paho.mqtt.publish as mqtt_publish  # type: ignore[import-untyped]
+
+        host, port = _parse_broker_host_port(url, settings.mqtt_broker_port)
+        mqtt_publish.single(
+            topic=topic,
+            payload=payload,
+            qos=1,
+            retain=True,
+            hostname=host,
+            port=port,
         )
+        return True
+    except Exception as exc:
+        logger.warning("MQTT retained config publish skipped/failed for %s: %s", device_id, exc)
+        return False
 
-    def handle(self, event: DomainEvent) -> None:
-        if isinstance(event, ThresholdCrossed):
-            self._alert_repo.create_alert(
-                event_type=event.event_type,
-                message=event.message
-                or f"Low soil moisture ({event.moisture:.2f}) crossed threshold ({event.threshold_low:.2f}).",
-                severity="warning",
-                location_id=event.location_id,
-                zone_id=event.zone_id,
-                device_id=event.device_id,
+
+def ingest_mqtt_reading_message(topic: str, raw_payload: bytes | str) -> bool:
+    """Handles a message on greenhouse/devices/{device_id}/reading using Phase 5 translator + ReadingIngest."""
+    parts = topic.strip("/").split("/")
+    if len(parts) != 4 or parts[0] != "greenhouse" or parts[1] != "devices" or parts[3] != "reading":
+        logger.warning("Ignoring unexpected MQTT topic: %s", topic)
+        return False
+
+    try:
+        device_id = UUID(parts[2])
+    except ValueError:
+        logger.warning("Unknown/invalid device_id in MQTT topic '%s'; dropping.", topic)
+        return False
+
+    try:
+        text_data = raw_payload.decode("utf-8") if isinstance(raw_payload, bytes) else raw_payload
+        body = json.loads(text_data)
+    except Exception as exc:
+        logger.warning("Invalid JSON on MQTT topic '%s': %s; dropping.", topic, exc)
+        return False
+
+    with SessionLocal() as session:
+        device_repo = DeviceRepository(session)
+        device = device_repo.get_device(device_id)
+        if device is None or device.role != "sensor":
+            logger.warning("Unknown sensor device_id '%s' from MQTT; dropping.", device_id)
+            return False
+
+        try:
+            translated = MqttSensorAdapter.translate_payload(
+                device, body, source="mqtt"
             )
-            return
-
-        if isinstance(event, ReadingCreated) and event.unit.lower() == "vwc":
-            threshold = DEFAULT_LOW_MOISTURE_THRESHOLD
-            if event.zone_id is not None:
-                zone_low = self._zone_threshold_lookup(event.zone_id)
-                if zone_low is not None:
-                    threshold = zone_low
-
-            if event.value < threshold:
-                self._alert_repo.create_alert(
-                    event_type="threshold.crossed",
-                    message=(
-                        f"Low moisture reading ({event.value:.2f} {event.unit}) "
-                        f"below threshold ({threshold:.2f})."
-                    ),
-                    severity="warning",
-                    location_id=event.location_id,
-                    zone_id=event.zone_id,
-                    device_id=event.device_id,
-                )
-            return
-
-        if isinstance(event, CommandFailed):
-            self._alert_repo.create_alert(
-                event_type=event.event_type,
-                message=f"Command '{event.command_type}' {event.status}: {event.error_message}",
-                severity="critical" if event.status == "failed" else "warning",
-                location_id=event.location_id,
-                zone_id=event.zone_id,
-                device_id=event.device_id,
+            bus = build_default_event_bus(AlertRepository(session))
+            ingest = ReadingIngest(
+                device_repo=device_repo,
+                reading_repo=ReadingRepository(session),
+                event_bus=bus,
             )
+            ingest.record(device_id, translated_reading=translated)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to ingest MQTT reading for '%s': %s", device_id, exc)
+            return False
+
+
+class OptionalMqttSubscriber:
+    """Background MQTT subscriber that starts ONLY when MQTT_BROKER_URL is configured."""
+
+    def __init__(self, broker_url: str | None = None, default_port: int = 1883) -> None:
+        self._broker_url = broker_url
+        self._default_port = default_port
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    @property
+    def is_enabled(self) -> bool:
+        return bool(self._broker_url and self._broker_url.strip())
+
+    def start(self) -> None:
+        if not self.is_enabled:
             return
+        self._thread = threading.Thread(
+            target=self._run_loop, name="mqtt-subscriber", daemon=True
+        )
+        self._thread.start()
 
-        if isinstance(event, ActuatorStateChanged) and event.new_state == "error":
-            self._alert_repo.create_alert(
-                event_type=event.event_type,
-                message=f"Actuator entered ERROR state (from '{event.previous_state}').",
-                severity="critical",
-                location_id=event.location_id,
-                zone_id=event.zone_id,
-                device_id=event.device_id,
-            )
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
 
+    def _run_loop(self) -> None:
+        assert self._broker_url is not None
+        host, port = _parse_broker_host_port(self._broker_url, self._default_port)
+        try:
+            import paho.mqtt.client as mqtt  # type: ignore[import-untyped]
 
-class MetricsSubscriber(EventSubscriber):
-    """In-memory counter subscriber (no database table required)."""
+            client = mqtt.Client()
 
-    def __init__(self) -> None:
-        self.counts: Counter[str] = Counter()
+            def on_connect(cli, _userdata, _flags, rc):
+                if rc == 0:
+                    cli.subscribe("greenhouse/devices/+/reading")
 
-    def handle(self, event: DomainEvent) -> None:
-        self.counts[event.event_type] += 1
+            def on_message(_cli, _userdata, msg):
+                ingest_mqtt_reading_message(msg.topic, msg.payload)
 
-
-def build_default_event_bus(alert_repo: AlertRepository) -> EventBus:
-    bus = EventBus()
-    bus.subscribe(AlertPersistenceSubscriber(alert_repo))
-    bus.subscribe(MetricsSubscriber())
-    return bus
+            client.on_connect = on_connect
+            client.on_message = on_message
+            client.connect(host, port, keepalive=60)
+            while not self._stop_event.is_set():
+                client.loop(timeout=1.0)
+            client.disconnect()
+        except (ImportError, OSError, socket.error) as exc:
+            logger.info("MQTT subscriber inactive (%s:%s): %s", host, port, exc)

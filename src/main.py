@@ -9,6 +9,8 @@ from scalar_fastapi import get_scalar_api_reference
 from src.application.alerts.subscribers import build_default_event_bus
 from src.application.readings.sampler import SimulationSampler
 from src.application.readings.service import ReadingIngest
+from src.application.realtime.connection_manager import dashboard_ws_manager
+from src.infrastructure.mqtt.subscriber import OptionalMqttSubscriber
 from src.infrastructure.persistence.alert_repository import AlertRepository
 from src.infrastructure.persistence.base import SessionLocal
 from src.infrastructure.persistence.device_repository import DeviceRepository
@@ -23,6 +25,7 @@ from src.interfaces.api.health import health_check
 from src.interfaces.api.locations import router as locations_router
 from src.interfaces.api.overview import router as overview_router
 from src.interfaces.api.sensors import router as sensors_router
+from src.interfaces.api.ws import router as ws_router
 
 
 async def _sampler_loop() -> None:
@@ -50,6 +53,12 @@ async def _sampler_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    dashboard_ws_manager.set_event_loop(asyncio.get_running_loop())
+    mqtt_subscriber = OptionalMqttSubscriber(
+        broker_url=settings.mqtt_broker_url,
+        default_port=settings.mqtt_broker_port,
+    )
+    mqtt_subscriber.start()
     task = asyncio.create_task(_sampler_loop())
     try:
         yield
@@ -57,6 +66,7 @@ async def lifespan(_app: FastAPI):
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
+        mqtt_subscriber.stop()
 
 
 app = FastAPI(
@@ -93,6 +103,7 @@ app.include_router(overview_router)
 app.include_router(actuators_router)
 app.include_router(commands_router)
 app.include_router(alerts_router)
+app.include_router(ws_router)
 
 
 @app.get("/")
@@ -101,6 +112,7 @@ def root():
         "name": "Smart Greenhouse API",
         "health": "/health",
         "api_reference": "/scalar",
+        "ws": "/api/ws",
     }
 
 

@@ -1,5 +1,9 @@
+import logging
+from typing import Any
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.application.alerts.subscribers import build_default_event_bus
@@ -19,8 +23,12 @@ from src.application.locations.zone_assignment_service import (
     ZoneAssignmentService,
     ZoneNotFoundError,
 )
-from src.application.readings.dto import UpdateSamplingRequestDto
+from src.application.readings.dto import ReadingDto, UpdateSamplingRequestDto
+from src.application.readings.service import ReadingIngest
 from src.domain.actuators.state import IllegalTransitionError
+from src.domain.sensors.ports import SensorAdapterError
+from src.infrastructure.adapters.sensors.mqtt import MqttSensorAdapter
+from src.infrastructure.mqtt.subscriber import publish_retained_mqtt_config
 from src.infrastructure.persistence.actuator_state_repository import (
     ActuatorStateRepository,
 )
@@ -28,8 +36,20 @@ from src.infrastructure.persistence.alert_repository import AlertRepository
 from src.infrastructure.persistence.base import get_db
 from src.infrastructure.persistence.device_repository import DeviceRepository
 from src.infrastructure.persistence.location_repository import LocationRepository
+from src.infrastructure.persistence.reading_repository import ReadingRepository
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/devices", tags=["devices"])
+
+
+class DeviceSamplingConfigDto(BaseModel):
+    sampling_interval_seconds: int
+    tracking_enabled: bool
+
+
+class DeviceHttpReadingRequestDto(BaseModel):
+    value: float
+    unit: str
 
 
 def get_family_service(db: Session = Depends(get_db)) -> DeviceFamilyService:
@@ -61,6 +81,15 @@ def get_actuator_state_service(
     return ActuatorStateService(
         device_repo=DeviceRepository(db),
         state_repo=ActuatorStateRepository(db),
+        event_bus=bus,
+    )
+
+
+def get_reading_ingest(db: Session = Depends(get_db)) -> ReadingIngest:
+    bus = build_default_event_bus(AlertRepository(db))
+    return ReadingIngest(
+        device_repo=DeviceRepository(db),
+        reading_repo=ReadingRepository(db),
         event_bus=bus,
     )
 
@@ -121,6 +150,25 @@ def assign_device_to_zone(
     return to_device_dto(updated, persisted_state=persisted_state)
 
 
+@router.get("/{device_id}/sampling", response_model=DeviceSamplingConfigDto)
+def get_device_sampling(
+    device_id: UUID,
+    repo: DeviceRepository = Depends(get_device_repo),
+) -> DeviceSamplingConfigDto:
+    """Device HTTP endpoint: ESP32 controllers GET their sampling interval and tracking flag."""
+    device = repo.get_device(device_id)
+    if device is None:
+        logger.warning("Unknown device_id '%s' requested GET /sampling; dropping.", device_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device '{device_id}' not found.",
+        )
+    return DeviceSamplingConfigDto(
+        sampling_interval_seconds=device.sampling_interval_seconds,
+        tracking_enabled=device.tracking_enabled,
+    )
+
+
 @router.patch("/{device_id}/sampling", response_model=DeviceDto)
 def update_device_sampling(
     device_id: UUID,
@@ -145,12 +193,55 @@ def update_device_sampling(
             detail=f"Device '{device_id}' not found.",
         )
 
+    protocol = str(updated.default_config.get("protocol", "")).lower()
+    if protocol == "mqtt" and updated.id is not None:
+        publish_retained_mqtt_config(
+            device_id=updated.id,
+            sampling_interval_seconds=updated.sampling_interval_seconds,
+            tracking_enabled=updated.tracking_enabled,
+        )
+
     persisted_state = (
         state_repo.get_state(updated.id)
         if updated.role == "actuator" and updated.id is not None
         else None
     )
     return to_device_dto(updated, persisted_state=persisted_state)
+
+
+@router.post(
+    "/{device_id}/readings",
+    response_model=ReadingDto,
+    status_code=status.HTTP_201_CREATED,
+)
+def ingest_device_http_reading(
+    device_id: UUID,
+    payload: DeviceHttpReadingRequestDto,
+    repo: DeviceRepository = Depends(get_device_repo),
+    ingest: ReadingIngest = Depends(get_reading_ingest),
+) -> ReadingDto:
+    """Device HTTP endpoint: translates {value, unit} with source='http' and delegates to ReadingIngest."""
+    device = repo.get_device(device_id)
+    if device is None or device.role != "sensor":
+        logger.warning("Unknown sensor device_id '%s' posted to /readings; dropping.", device_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Sensor device '{device_id}' not found.",
+        )
+
+    try:
+        translated = MqttSensorAdapter.translate_payload(
+            device,
+            payload.model_dump(),
+            source="http",
+        )
+    except SensorAdapterError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return ingest.record(device_id, translated_reading=translated)
 
 
 @router.post("/{device_id}/transition", response_model=DeviceDto)
